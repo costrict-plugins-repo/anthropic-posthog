@@ -1,0 +1,218 @@
+# PostHog AI plugin
+
+Official PostHog plugin for AI clients. Access PostHog products directly from your AI coding tool.
+
+## Installation
+
+### Claude Code
+
+1. Install the plugin:
+    ```bash
+    claude plugin install posthog
+    ```
+
+    Or install from this repo as a marketplace:
+    ```bash
+    claude plugin marketplace add PostHog/ai-plugin
+    claude plugin install posthog@posthog
+    ```
+
+2. Authenticate via OAuth:
+    ```bash
+    # Just enter Claude Code anywhere
+    claude
+    # Then, use the /mcp command within Claude, select plugin:posthog:posthog, and press Enter
+    /mcp
+    ```
+    Then follow the browser prompts to log into PostHog.
+
+3. (Optional) Send Claude Code sessions to PostHog LLM Analytics.
+
+    Add to `~/.claude/settings.json` (global) or `.claude/settings.local.json` (per-project):
+    ```json
+    {
+      "env": {
+        "POSTHOG_LLMA_CC_ENABLED": "true",
+        "POSTHOG_API_KEY": "phc_...",
+        "POSTHOG_HOST": "https://eu.i.posthog.com"
+      }
+    }
+    ```
+
+    Both `POSTHOG_LLMA_CC_ENABLED=true` and `POSTHOG_API_KEY` are required. Sessions are sent when Claude Code exits. Set `POSTHOG_LLMA_PRIVACY_MODE=true` to redact prompt/output content. Add custom properties to all events with `POSTHOG_LLMA_CUSTOM_PROPERTIES` (JSON string, e.g. `'{"ai_product": "my-app"}'`). Set `POSTHOG_AI_PURPOSE` to declare what the session is doing relative to the repo — documented values are `authoring` and `review`, emitted as `$ai_purpose`. Useful when a harness wraps an agent it can't modify (e.g. a CI job running Claude Code as a reviewer); left unset the property is omitted.
+
+#### Write approval
+
+The plugin asks before sensitive PostHog writes, such as deletions.
+
+In Claude Code's `bypassPermissions` mode, the hook skips its prompt.
+
+Install `python3` to skip prompts for large or complex inputs.
+
+- `POSTHOG_MCP_EXEC_GATE_DISABLE=1` turns off the gate.
+- `POSTHOG_MCP_EXEC_GATE_DENY` replaces the default set. Use `*` for all writes.
+- `POSTHOG_MCP_EXEC_GATE_ALLOW` exempts matching tools and takes precedence.
+
+Both lists take comma-separated shell globs, such as `annotation-*`.
+
+Known reads pass through, and cross-project calls prompt while the gate is on.
+
+A PostHog MCP connection you add yourself with `split_writes=true` lists `exec-read` and `exec-write` instead of `exec`. The plugin's own connection keeps `exec`. `exec-read` calls pass through because the server refuses writes there. Every `exec-write` call prompts, whatever tool it runs. `POSTHOG_MCP_EXEC_GATE_ALLOW`, `POSTHOG_MCP_EXEC_GATE_DISABLE` and `bypassPermissions` mode skip that prompt, but only the last two skip it for cross-project calls.
+
+#### Session capture without the rest of the plugin
+
+To send Claude Code sessions to PostHog LLM analytics without the slash commands or the MCP server, install the capture plugin on its own:
+
+```bash
+claude plugin marketplace add PostHog/ai-plugin
+claude plugin install posthog-telemetry@posthog
+```
+
+It registers one `SessionEnd` hook and nothing else, so it adds nothing to the context of a session. It needs only the Python standard library, and it reads the same environment variables as step 3 above.
+
+Install it instead of the `posthog` plugin, not alongside it. Both register the same hook, so running both parses and uploads every session twice. PostHog dedupes the events themselves, because their UUIDs are derived from the session, but the two hooks race on the status file.
+
+### Cursor
+
+Install from the [Cursor Marketplace](https://cursor.com/marketplace) or add manually in Cursor Settings > Plugins.
+
+The plugin installs the PostHog MCP server. Claude Code's session capture and the write-command gate don't run in Cursor.
+
+In Cursor IDE, the MCP connection runs through Cursor's hosted service, so Cursor holds your PostHog sign-in and you may need to sign in again after updating the plugin.
+
+Grok Bot (desktop and mobile) lists the same plugin from the Cursor Marketplace. Open **Plugins**, search for **PostHog**, install it, and log into PostHog when prompted.
+
+### Codex
+
+1. Add the marketplace:
+    ```bash
+    codex plugin marketplace add PostHog/ai-plugin
+    ```
+
+2. Install the plugin from inside Codex:
+    ```
+    codex
+    # Then run /plugins, select PostHog, and install
+    /plugins
+    ```
+
+3. Trust the plugin's hook when Codex asks you to review it at startup, or later from `/hooks`. The hook approves known PostHog reads (`tools`, `search`, `info` and the other read-only `exec` commands, and calls to tools on `hooks/read-tools.txt`, and every `exec-read` call, which the server keeps read-only) so they run without a prompt. Every other call, including every write, gets Codex's own approval prompt. The `POSTHOG_MCP_EXEC_GATE_*` variables don't apply on Codex. Codex asks before every PostHog call until you trust the hook, and again after each plugin update until you re-trust it. The one exception is `render-ui`, which shows a PostHog chart or view in the conversation and never changes data, so it always runs without a prompt.
+
+    A few Codex settings change this:
+
+    - A `[mcp_servers.posthog]` entry in your own `~/.codex/config.toml` replaces the plugin's server config entirely, including the prompt mode the gate relies on. Remove it, or add `default_tools_approval_mode = "prompt"` and a `[mcp_servers.posthog.tools.render-ui]` table with `approval_mode = "approve"` to it.
+    - With approval policy `never` and full access (`--dangerously-bypass-approvals-and-sandbox`), Codex approves MCP calls before the hook runs, so nothing is gated.
+    - With approval policy `never` and a restricted sandbox, calls the hook doesn't approve are denied instead of prompted.
+
+### Antigravity
+
+1. Install the plugin:
+    ```bash
+    agy plugin install https://github.com/PostHog/ai-plugin
+    ```
+
+2. Authenticate via OAuth: run `/mcp`, select `posthog_posthog`, and choose **Authenticate**. Open the link it shows, log into PostHog, and paste the authorization code back into Antigravity.
+
+The plugin installs the PostHog MCP server. Claude Code's session capture and the write-command gate don't run in Antigravity.
+
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/PostHog/ai-plugin
+```
+
+### Grok
+
+1. Install the plugin:
+    ```bash
+    grok plugin install PostHog/ai-plugin --trust
+    ```
+
+2. Authenticate via OAuth:
+
+    On first use of a PostHog tool, Grok prompts you to authorize in your browser. Log into PostHog to connect.
+
+### Claude Cowork
+
+1. Add the marketplace: open **Settings** > **Plugins**, click **Add** > **Add marketplace**, enter `PostHog/ai-plugin`, and click **Sync**.
+
+2. Install the plugin: click **Browse**, select **PostHog**, and install. The plugin stays in sync with this repo automatically.
+
+3. Authenticate via OAuth: on first use of a PostHog tool, follow the browser prompts to log into PostHog.
+
+## How to develop
+
+1. Clone and install the plugin:
+    ```bash
+    git clone https://github.com/PostHog/ai-plugin
+    claude --plugin-dir ./ai-plugin
+    ```
+
+2. Authenticate via OAuth:
+    ```
+    /mcp
+    ```
+    Then follow the browser prompts to log into PostHog.
+
+Logos in `assets/` come from https://brand.posthog.com/logo. Refresh them from there.
+
+## Releasing
+
+See [RELEASING.md](RELEASING.md) for how a change reaches each AI client, and [.github/PLUGIN_SYNC.md](.github/PLUGIN_SYNC.md) for the daily sync job.
+
+## Features
+
+This plugin connects your AI client to the PostHog MCP server, which covers:
+
+- **Feature flags** - Create, update, and manage feature flags
+- **Experiments** - Run and analyze A/B tests
+- **Insights** - Query analytics and create visualizations
+- **Dashboards** - Manage dashboards and add insights
+- **Error tracking** - View and debug errors
+- **LLM analytics** - Track AI/LLM costs and usage
+- **Documentation** - Search PostHog docs
+- And more
+
+The plugin bundles no skills. The PostHog MCP server provides them, and your agent loads one when it needs it through the server's `learn` command.
+
+## Example usage
+
+```
+> What feature flags do I have?
+> Create a feature flag called new-onboarding for 50% of users
+
+> Show me errors from the last 24 hours
+> Which errors are affecting the most users?
+
+> How many users signed up this week?
+> What's the conversion rate for the checkout funnel?
+
+> Show me all my experiments
+> What are the results of the checkout-flow experiment?
+
+> Create a new dashboard called Product Metrics
+> Add the signup funnel insight to the Growth dashboard
+
+> What are the responses to the NPS survey?
+> Create a feedback survey for the checkout page
+
+> What's my most triggered event?
+> Show me the top 10 pages by pageviews
+```
+
+## Self-hosted
+
+For self-hosted PostHog instances, set the `POSTHOG_MCP_URL` environment variable to point to your instance:
+
+```bash
+export POSTHOG_MCP_URL="https://mcp.your-posthog-instance.com/mcp"
+```
+
+## Documentation
+
+- [PostHog MCP documentation](https://posthog.com/docs/model-context-protocol)
+- [PostHog API documentation](https://posthog.com/docs/api)
+
+## License
+
+MIT
